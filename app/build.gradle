@@ -153,9 +153,11 @@ android {
         play {
             isDefault true
             dimension "distribution"
-            apply plugin: 'com.google.gms.google-services'
+            applicationId "tech.encrypt.app" 
+            // Desativando explicitamente o plugin do Firebase
+            // apply plugin: 'com.google.gms.google-services'
             ext.websiteUpdateUrl = "null"
-            buildConfigField "boolean", "PLAY_STORE_DISABLED", "false"
+            buildConfigField "boolean", "PLAY_STORE_DISABLED", "true" // Modificado para true para desativar o Firebase
             buildConfigField "org.session.libsession.utilities.Device", "DEVICE", "org.session.libsession.utilities.Device.ANDROID"
             buildConfigField "String", "NOPLAY_UPDATE_URL", "$ext.websiteUpdateUrl"
             buildConfigField 'String', 'PUSH_KEY_SUFFIX', '\"\"'

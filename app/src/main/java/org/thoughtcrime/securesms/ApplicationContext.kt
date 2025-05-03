@@ -299,19 +299,49 @@ class ApplicationContext : Application(), DefaultLifecycleObserver,
         )
         initializeWebRtc()
         initializeBlobProvider()
-        resubmitProfilePictureIfNeeded()
         loadEmojiSearchIndexIfNeeded()
         refresh()
 
         val networkConstraint = NetworkConstraint.Factory(this).create()
         isConnectedToNetwork = { networkConstraint.isMet }
 
-        snodeClock.start()
-        pushRegistrationHandler.run()
-        configUploader.start()
-        destroyedGroupSync.start()
-        adminStateSync.start()
-        cleanupInvitationHandler.start()
+        // Iniciar componentes críticos usando coroutines com tratamento de erros
+        queue {
+            try {
+                snodeClock.start()
+                Log.i(TAG, "Iniciado snodeClock com sucesso")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao iniciar snodeClock", e)
+            }
+            
+            try {
+                pushRegistrationHandler.run()
+                Log.i(TAG, "Iniciado pushRegistrationHandler com sucesso")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao iniciar pushRegistrationHandler", e)
+            }
+            
+            try {
+                configUploader.start()
+                Log.i(TAG, "Iniciado configUploader com sucesso")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao iniciar configUploader", e)
+            }
+            
+            // Adiando inicialização de serviços não essenciais para evitar ANR
+            Executors.newSingleThreadExecutor().execute {
+                try {
+                    Thread.sleep(5000) // Aguarda 5 segundos antes de iniciar outros serviços
+                    destroyedGroupSync.start()
+                    adminStateSync.start()
+                    cleanupInvitationHandler.start()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao iniciar serviços secundários", e)
+                }
+            }
+            
+            Unit
+        }
 
         // add our shortcut debug menu if we are not in a release build
         if (BuildConfig.BUILD_TYPE != "release") {
@@ -328,12 +358,16 @@ class ApplicationContext : Application(), DefaultLifecycleObserver,
 
             ShortcutManagerCompat.pushDynamicShortcut(this, shortcut)
         }
-    }
-
-    override fun getWorkManagerConfiguration(): Configuration {
-        return Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            .build()
+        
+        // Resubmissão do perfil adiada para evitar ANR durante inicialização
+        Executors.newSingleThreadExecutor().execute {
+            try {
+                Thread.sleep(10000) // Aguarda 10 segundos
+                resubmitProfilePictureIfNeeded()
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao resubmeter foto de perfil", e)
+            }
+        }
     }
 
     override fun onStart(owner: LifecycleOwner) {
@@ -341,21 +375,29 @@ class ApplicationContext : Application(), DefaultLifecycleObserver,
         Log.i(TAG, "App is now visible.")
         KeyCachingService.onAppForegrounded(this)
 
-        // If the user account hasn't been created or onboarding wasn't finished then don't start
-        // the pollers
+        // Se a conta de usuário não foi criada ou o onboarding não foi concluído, não inicie os pollers
         if (textSecurePreferences.getLocalNumber() == null) {
             return
         }
 
-        startPollingIfNeeded()
-
-        queue {
-            startPolling()
-            Unit
+        // Inicia o polling de forma assíncrona para evitar ANR
+        Executors.newSingleThreadExecutor().execute {
+            try {
+                startPollingIfNeeded()
+                startPolling()
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao iniciar pollers", e)
+            }
         }
 
-        // fetch last version data
-        versionDataFetcher.startTimedVersionCheck()
+        // fetch last version data de forma assíncrona
+        Executors.newSingleThreadExecutor().execute {
+            try {
+                versionDataFetcher.startTimedVersionCheck()
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao verificar atualização de versão", e)
+            }
+        }
     }
 
     override fun onStop(owner: LifecycleOwner) {
@@ -407,6 +449,13 @@ class ApplicationContext : Application(), DefaultLifecycleObserver,
         if (conscryptPosition < 0) {
             Log.w(TAG, "Did not install Conscrypt provider. May already be present.")
         }
+    }
+
+    // Implementação do método exigido pela interface Configuration.Provider
+    override fun getWorkManagerConfiguration(): Configuration {
+        return Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
     }
 
     private fun initializeLogging() {
