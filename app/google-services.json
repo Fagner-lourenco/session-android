@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "566795807038-v599g0ke150h2kg3csjlctp087qp6mqg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "tech.encrypt.app",
+            "certificate_hash": "23e9951cff27ee78cfd8bd5ba49a87d1cb0a1adb"
+          }
+        },
+        {
           "client_id": "566795807038-n5kc6v3te91vinsjv67fn16o81784p25.apps.googleusercontent.com",
           "client_type": 3
         }
